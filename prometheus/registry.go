@@ -258,11 +258,11 @@ func (errs MultiError) MaybeUnwrap() error {
 // Registry implements Collector to allow it to be used for creating groups of
 // metrics. See the Grouping example for how this can be done.
 type Registry struct {
-	mtx                   sync.RWMutex
 	collectorsByID        map[uint64]Collector // ID is a hash of the descIDs.
 	descIDs               map[uint64]struct{}
 	dimHashesByName       map[string]uint64
 	uncheckedCollectors   []Collector
+	mtx                   sync.RWMutex
 	pedanticChecksEnabled bool
 }
 

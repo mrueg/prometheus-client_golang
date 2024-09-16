@@ -70,18 +70,20 @@ type HTTPDoer interface {
 type Pusher struct {
 	error error
 
-	url, job string
-	grouping map[string]string
-
-	gatherers  prometheus.Gatherers
 	registerer prometheus.Registerer
 
-	client             HTTPDoer
-	header             http.Header
-	useBasicAuth       bool
+	client   HTTPDoer
+	grouping map[string]string
+
+	header http.Header
+
+	url, job           string
 	username, password string
 
 	expfmt expfmt.Format
+
+	gatherers    prometheus.Gatherers
+	useBasicAuth bool
 }
 
 // New creates a new Pusher to push to the provided URL with the provided job

@@ -38,10 +38,11 @@ type delegator interface {
 type responseWriterDelegator struct {
 	http.ResponseWriter
 
-	status             int
-	written            int64
-	wroteHeader        bool
 	observeWriteHeader func(int)
+
+	status      int
+	written     int64
+	wroteHeader bool
 }
 
 func (r *responseWriterDelegator) Status() int {

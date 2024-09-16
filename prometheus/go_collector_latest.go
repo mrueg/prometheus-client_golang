@@ -94,19 +94,17 @@ func bestEffortLookupRM(lookup []string) []metrics.Description {
 type goCollector struct {
 	base baseGoCollector
 
-	// mu protects updates to all fields ensuring a consistent
-	// snapshot is always produced by Collect.
-	mu sync.Mutex
-
-	// Contains all samples that has to retrieved from runtime/metrics (not all of them will be exposed).
-	sampleBuf []metrics.Sample
 	// sampleMap allows lookup for MemStats metrics and runtime/metrics histograms for exact sums.
 	sampleMap map[string]*metrics.Sample
 
+	rmExactSumMapForHist map[string]string
+
+	// Contains all samples that has to retrieved from runtime/metrics (not all of them will be exposed).
+	sampleBuf []metrics.Sample
+
 	// rmExposedMetrics represents all runtime/metrics package metrics
 	// that were configured to be exposed.
-	rmExposedMetrics     []collectorMetric
-	rmExactSumMapForHist map[string]string
+	rmExposedMetrics []collectorMetric
 
 	// With Go 1.17, the runtime/metrics package was introduced.
 	// From that point on, metric names produced by the runtime/metrics
@@ -115,7 +113,12 @@ type goCollector struct {
 	//
 	// This field exists to export the same values under the old names
 	// as well.
-	msMetrics        memStatsMetrics
+	msMetrics memStatsMetrics
+
+	// mu protects updates to all fields ensuring a consistent
+	// snapshot is always produced by Collect.
+	mu sync.Mutex
+
 	msMetricsEnabled bool
 }
 
@@ -464,17 +467,17 @@ type batchHistogram struct {
 	selfCollector
 
 	// Static fields updated only once.
-	desc   *Desc
-	hasSum bool
+	desc    *Desc
+	buckets []float64 // Inclusive lower bounds, like runtime/metrics.
+	counts  []uint64
+	sum     float64 // Used if hasSum is true.
 
 	// Because this histogram operates in batches, it just uses a
 	// single mutex for everything. updates are always serialized
 	// but Write calls may operate concurrently with updates.
 	// Contention between these two sources should be rare.
-	mu      sync.Mutex
-	buckets []float64 // Inclusive lower bounds, like runtime/metrics.
-	counts  []uint64
-	sum     float64 // Used if hasSum is true.
+	mu     sync.Mutex
+	hasSum bool
 }
 
 // newBatchHistogram creates a new batch histogram value with the given

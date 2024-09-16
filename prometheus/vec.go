@@ -36,11 +36,11 @@ import (
 type MetricVec struct {
 	*metricMap
 
-	curry []curriedLabelValue
-
 	// hashAdd and hashAddByte can be replaced for testing collision handling.
 	hashAdd     func(h uint64, s string) uint64
 	hashAddByte func(h uint64, b byte) uint64
+
+	curry []curriedLabelValue
 }
 
 // NewMetricVec returns an initialized metricVec.
@@ -165,8 +165,8 @@ func (m *MetricVec) CurryWith(labels Labels) (*MetricVec, error) {
 				continue // Label stays uncurried.
 			}
 			newCurry = append(newCurry, curriedLabelValue{
-				i,
 				m.desc.variableLabels.constrain(labelName, val),
+				i,
 			})
 		}
 	}
@@ -302,23 +302,23 @@ func (m *MetricVec) hashLabels(labels Labels) (uint64, error) {
 // metricWithLabelValues provides the metric and its label values for
 // disambiguation on hash collision.
 type metricWithLabelValues struct {
-	values []string
 	metric Metric
+	values []string
 }
 
 // curriedLabelValue sets the curried value for a label at the given index.
 type curriedLabelValue struct {
-	index int
 	value string
+	index int
 }
 
 // metricMap is a helper for metricVec and shared between differently curried
 // metricVecs.
 type metricMap struct {
-	mtx       sync.RWMutex // Protects metrics.
 	metrics   map[uint64][]metricWithLabelValues
 	desc      *Desc
 	newMetric func(labelValues ...string) Metric
+	mtx       sync.RWMutex // Protects metrics.
 }
 
 // Describe implements Collector. It will send exactly one Desc to the provided

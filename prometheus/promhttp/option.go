@@ -30,9 +30,9 @@ type LabelValueFromCtx func(ctx context.Context) string
 
 // options store options for both a handler or round tripper.
 type options struct {
-	extraMethods       []string
 	getExemplarFn      func(requestCtx context.Context) prometheus.Labels
 	extraLabelsFromCtx map[string]LabelValueFromCtx
+	extraMethods       []string
 }
 
 func defaultOptions() *options {

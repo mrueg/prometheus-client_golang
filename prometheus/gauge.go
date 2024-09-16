@@ -88,15 +88,14 @@ func NewGauge(opts GaugeOpts) Gauge {
 }
 
 type gauge struct {
-	// valBits contains the bits of the represented float64 value. It has
-	// to go first in the struct to guarantee alignment for atomic
-	// operations.  http://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	valBits uint64
-
 	selfCollector
 
 	desc       *Desc
 	labelPairs []*dto.LabelPair
+	// valBits contains the bits of the represented float64 value. It has
+	// to go first in the struct to guarantee alignment for atomic
+	// operations.  http://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	valBits uint64
 }
 
 func (g *gauge) Desc() *Desc {

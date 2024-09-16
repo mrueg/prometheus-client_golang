@@ -357,6 +357,24 @@ func ExponentialBucketsRange(minBucket, maxBucket float64, count int) []float64 
 // and can safely be left at their zero value, although it is strongly
 // encouraged to set a Help string.
 type HistogramOpts struct {
+
+	// ConstLabels are used to attach fixed labels to this metric. Metrics
+	// with the same fully-qualified name must have the same label names in
+	// their ConstLabels.
+	//
+	// ConstLabels are only used rarely. In particular, do not use them to
+	// attach the same labels to all your metrics. Those use cases are
+	// better covered by target labels set by the scraping Prometheus
+	// server, or by one specific metric (e.g. a build_info or a
+	// machine_role metric). See also
+	// https://prometheus.io/docs/instrumenting/writing_exporters/#target-labels-not-static-scraped-labels
+	ConstLabels Labels
+
+	// now is for testing purposes, by default it's time.Now.
+	now func() time.Time
+
+	// afterFunc is for testing purposes, by default it's time.AfterFunc.
+	afterFunc func(time.Duration, func()) *time.Timer
 	// Namespace, Subsystem, and Name are components of the fully-qualified
 	// name of the Histogram (created by joining these components with
 	// "_"). Only Name is mandatory, the others merely help structuring the
@@ -371,18 +389,6 @@ type HistogramOpts struct {
 	// Metrics with the same fully-qualified name must have the same Help
 	// string.
 	Help string
-
-	// ConstLabels are used to attach fixed labels to this metric. Metrics
-	// with the same fully-qualified name must have the same label names in
-	// their ConstLabels.
-	//
-	// ConstLabels are only used rarely. In particular, do not use them to
-	// attach the same labels to all your metrics. Those use cases are
-	// better covered by target labels set by the scraping Prometheus
-	// server, or by one specific metric (e.g. a build_info or a
-	// machine_role metric). See also
-	// https://prometheus.io/docs/instrumenting/writing_exporters/#target-labels-not-static-scraped-labels
-	ConstLabels Labels
 
 	// Buckets defines the buckets into which observations are counted. Each
 	// element in the slice is the upper inclusive bound of a bucket. The
@@ -440,6 +446,25 @@ type HistogramOpts struct {
 	// constant (or any negative float value).
 	NativeHistogramZeroThreshold float64
 
+	NativeHistogramMinResetDuration time.Duration
+	NativeHistogramMaxZeroThreshold float64
+
+	// NativeHistogramMaxExemplars limits the number of exemplars
+	// that are kept in memory for each native histogram. If you leave it at
+	// zero, a default value of 10 is used. If no exemplars should be kept specifically
+	// for native histograms, set it to a negative value. (Scrapers can
+	// still use the exemplars exposed for classic buckets, which are managed
+	// independently.)
+	NativeHistogramMaxExemplars int
+	// NativeHistogramExemplarTTL is only checked once
+	// NativeHistogramMaxExemplars is exceeded. In that case, the
+	// oldest exemplar is removed if it is older than NativeHistogramExemplarTTL.
+	// Otherwise, the older exemplar in the pair of exemplars that are closest
+	// together (on an exponential scale) is removed.
+	// If NativeHistogramExemplarTTL is left at its zero value, a default value of
+	// 5m is used. To always delete the oldest exemplar, set it to a negative value.
+	NativeHistogramExemplarTTL time.Duration
+
 	// The next three fields define a strategy to limit the number of
 	// populated sparse buckets. If NativeHistogramMaxBucketNumber is left
 	// at zero, the number of buckets is not limited. (Note that this might
@@ -469,31 +494,7 @@ type HistogramOpts struct {
 	//  - Any increased zero threshold or reduced resolution is reset back
 	//    to their original values once NativeHistogramMinResetDuration has
 	//    passed (since the last reset or the creation of the histogram).
-	NativeHistogramMaxBucketNumber  uint32
-	NativeHistogramMinResetDuration time.Duration
-	NativeHistogramMaxZeroThreshold float64
-
-	// NativeHistogramMaxExemplars limits the number of exemplars
-	// that are kept in memory for each native histogram. If you leave it at
-	// zero, a default value of 10 is used. If no exemplars should be kept specifically
-	// for native histograms, set it to a negative value. (Scrapers can
-	// still use the exemplars exposed for classic buckets, which are managed
-	// independently.)
-	NativeHistogramMaxExemplars int
-	// NativeHistogramExemplarTTL is only checked once
-	// NativeHistogramMaxExemplars is exceeded. In that case, the
-	// oldest exemplar is removed if it is older than NativeHistogramExemplarTTL.
-	// Otherwise, the older exemplar in the pair of exemplars that are closest
-	// together (on an exponential scale) is removed.
-	// If NativeHistogramExemplarTTL is left at its zero value, a default value of
-	// 5m is used. To always delete the oldest exemplar, set it to a negative value.
-	NativeHistogramExemplarTTL time.Duration
-
-	// now is for testing purposes, by default it's time.Now.
-	now func() time.Time
-
-	// afterFunc is for testing purposes, by default it's time.AfterFunc.
-	afterFunc func(time.Duration, func()) *time.Timer
+	NativeHistogramMaxBucketNumber uint32
 }
 
 // HistogramVecOpts bundles the options to create a HistogramVec metric.
@@ -608,6 +609,20 @@ type histogramCounts struct {
 	// Order in this struct matters for the alignment required by atomic
 	// operations, see http://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
+	// The sparse buckets for native histograms are implemented with a
+	// sync.Map for now. A dedicated data structure will likely be more
+	// efficient. There are separate maps for negative and positive
+	// observations. The map's value is an *int64, counting observations in
+	// that bucket. (Note that we don't use uint64 as an int64 won't
+	// overflow in practice, and working with signed numbers from the
+	// beginning simplifies the handling of deltas.) The map's key is the
+	// index of the bucket according to the used
+	// nativeHistogramSchema. Index 0 is for an upper bound of 1.
+	nativeHistogramBucketsPositive, nativeHistogramBucketsNegative sync.Map
+
+	// Regular buckets.
+	buckets []uint64
+
 	// sumBits contains the bits of the float64 representing the sum of all
 	// observations.
 	sumBits uint64
@@ -627,20 +642,6 @@ type histogramCounts struct {
 	nativeHistogramSchema int32
 	// Number of (positive and negative) sparse buckets.
 	nativeHistogramBucketsNumber uint32
-
-	// Regular buckets.
-	buckets []uint64
-
-	// The sparse buckets for native histograms are implemented with a
-	// sync.Map for now. A dedicated data structure will likely be more
-	// efficient. There are separate maps for negative and positive
-	// observations. The map's value is an *int64, counting observations in
-	// that bucket. (Note that we don't use uint64 as an int64 won't
-	// overflow in practice, and working with signed numbers from the
-	// beginning simplifies the handling of deltas.) The map's key is the
-	// index of the bucket according to the used
-	// nativeHistogramSchema. Index 0 is for an upper bound of 1.
-	nativeHistogramBucketsPositive, nativeHistogramBucketsNegative sync.Map
 }
 
 // observe manages the parts of observe that only affects
@@ -700,6 +701,29 @@ func (hc *histogramCounts) observe(v float64, bucket int, doSparse bool) {
 }
 
 type histogram struct {
+	// lastResetTime is protected by mtx. It is also used as created timestamp.
+	lastResetTime time.Time
+
+	selfCollector
+
+	// Two counts, one is "hot" for lock-free observations, the other is
+	// "cold" for writing out a dto.Metric. It has to be an array of
+	// pointers to guarantee 64bit alignment of the histogramCounts, see
+	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+	counts [2]*histogramCounts
+
+	desc *Desc
+
+	// now is for testing purposes, by default it's time.Now.
+	now func() time.Time
+
+	// afterFunc is for testing purposes, by default it's time.AfterFunc.
+	afterFunc       func(time.Duration, func()) *time.Timer
+	nativeExemplars nativeExemplars
+
+	upperBounds []float64
+	labelPairs  []*dto.LabelPair
+	exemplars   []atomic.Value // One more than buckets (to include +Inf), each a *dto.Exemplar.
 	// countAndHotIdx enables lock-free writes with use of atomic updates.
 	// The most significant bit is the hot index [0 or 1] of the count field
 	// below. Observe calls update the hot one. All remaining bits count the
@@ -718,39 +742,19 @@ type histogram struct {
 	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	countAndHotIdx uint64
 
-	selfCollector
-	desc *Desc
+	nativeHistogramZeroThreshold    float64 // The initial zero threshold.
+	nativeHistogramMaxZeroThreshold float64
+	nativeHistogramMinResetDuration time.Duration
 
 	// Only used in the Write method and for sparse bucket management.
 	mtx sync.Mutex
 
-	// Two counts, one is "hot" for lock-free observations, the other is
-	// "cold" for writing out a dto.Metric. It has to be an array of
-	// pointers to guarantee 64bit alignment of the histogramCounts, see
-	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG.
-	counts [2]*histogramCounts
-
-	upperBounds                     []float64
-	labelPairs                      []*dto.LabelPair
-	exemplars                       []atomic.Value // One more than buckets (to include +Inf), each a *dto.Exemplar.
-	nativeHistogramSchema           int32          // The initial schema. Set to math.MinInt32 if no sparse buckets are used.
-	nativeHistogramZeroThreshold    float64        // The initial zero threshold.
-	nativeHistogramMaxZeroThreshold float64
-	nativeHistogramMaxBuckets       uint32
-	nativeHistogramMinResetDuration time.Duration
-	// lastResetTime is protected by mtx. It is also used as created timestamp.
-	lastResetTime time.Time
+	nativeHistogramSchema     int32 // The initial schema. Set to math.MinInt32 if no sparse buckets are used.
+	nativeHistogramMaxBuckets uint32
 	// resetScheduled is protected by mtx. It is true if a reset is
 	// scheduled for a later time (when nativeHistogramMinResetDuration has
 	// passed).
-	resetScheduled  bool
-	nativeExemplars nativeExemplars
-
-	// now is for testing purposes, by default it's time.Now.
-	now func() time.Time
-
-	// afterFunc is for testing purposes, by default it's time.AfterFunc.
-	afterFunc func(time.Duration, func()) *time.Timer
+	resetScheduled bool
 }
 
 func (h *histogram) Desc() *Desc {
@@ -1284,11 +1288,11 @@ func (v *HistogramVec) MustCurryWith(labels Labels) ObserverVec {
 
 type constHistogram struct {
 	desc       *Desc
+	buckets    map[float64]uint64
+	createdTs  *timestamppb.Timestamp
+	labelPairs []*dto.LabelPair
 	count      uint64
 	sum        float64
-	buckets    map[float64]uint64
-	labelPairs []*dto.LabelPair
-	createdTs  *timestamppb.Timestamp
 }
 
 func (h *constHistogram) Desc() *Desc {
@@ -1656,10 +1660,10 @@ func addAndResetCounts(hot, cold *histogramCounts) {
 }
 
 type nativeExemplars struct {
-	sync.Mutex
-
-	ttl       time.Duration
 	exemplars []*dto.Exemplar
+
+	ttl time.Duration
+	sync.Mutex
 }
 
 func makeNativeExemplars(ttl time.Duration, maxCount int) nativeExemplars {

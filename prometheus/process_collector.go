@@ -24,13 +24,13 @@ import (
 type processCollector struct {
 	collectFn         func(chan<- Metric)
 	pidFn             func() (int, error)
-	reportErrors      bool
 	cpuTotal          *Desc
 	openFDs, maxFDs   *Desc
 	vsize, maxVsize   *Desc
 	rss               *Desc
 	startTime         *Desc
 	inBytes, outBytes *Desc
+	reportErrors      bool
 }
 
 // ProcessCollectorOpts defines the behavior of a process metrics collector

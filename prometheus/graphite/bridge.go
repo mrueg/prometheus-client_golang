@@ -54,8 +54,12 @@ const (
 
 // Config defines the Graphite bridge config.
 type Config struct {
-	// Whether to use Graphite tags or not. Defaults to false.
-	UseTags bool
+
+	// The Gatherer to use for metrics. Defaults to prometheus.DefaultGatherer.
+	Gatherer prometheus.Gatherer
+
+	// The logger that messages are written to. Defaults to no logging.
+	Logger Logger
 
 	// The url to push data to. Required.
 	URL string
@@ -69,30 +73,26 @@ type Config struct {
 	// The timeout for pushing metrics to Graphite. Defaults to 15 seconds.
 	Timeout time.Duration
 
-	// The Gatherer to use for metrics. Defaults to prometheus.DefaultGatherer.
-	Gatherer prometheus.Gatherer
-
-	// The logger that messages are written to. Defaults to no logging.
-	Logger Logger
-
 	// ErrorHandling defines how errors are handled. Note that errors are
 	// logged regardless of the configured ErrorHandling provided Logger
 	// is not nil.
 	ErrorHandling HandlerErrorHandling
+	// Whether to use Graphite tags or not. Defaults to false.
+	UseTags bool
 }
 
 // Bridge pushes metrics to the configured Graphite server.
 type Bridge struct {
-	useTags  bool
+	logger Logger
+
+	g        prometheus.Gatherer
 	url      string
 	prefix   string
 	interval time.Duration
 	timeout  time.Duration
 
 	errorHandling HandlerErrorHandling
-	logger        Logger
-
-	g prometheus.Gatherer
+	useTags       bool
 }
 
 // Logger is the minimal interface Bridge needs for logging. Note that

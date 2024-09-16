@@ -39,8 +39,8 @@ type LabelConstraint func(string) string
 // to normalize label values. This type is commonly used when constructing
 // metric vector Collectors.
 type ConstrainedLabel struct {
-	Name       string
 	Constraint LabelConstraint
+	Name       string
 }
 
 // ConstrainableLabels is an interface that allows creating of labels that can
@@ -111,8 +111,8 @@ func (uls UnconstrainedLabels) labelNames() []string {
 }
 
 type compiledLabels struct {
-	names            []string
 	labelConstraints map[string]LabelConstraint
+	names            []string
 }
 
 func (cls *compiledLabels) compile() *compiledLabels {

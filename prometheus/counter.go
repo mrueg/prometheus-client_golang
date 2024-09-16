@@ -101,22 +101,22 @@ func NewCounter(opts CounterOpts) Counter {
 }
 
 type counter struct {
+	selfCollector
+	exemplar atomic.Value // Containing nil or a *dto.Exemplar.
+
+	desc *Desc
+
+	createdTs *timestamppb.Timestamp
+
+	// now is for testing purposes, by default it's time.Now.
+	now        func() time.Time
+	labelPairs []*dto.LabelPair
 	// valBits contains the bits of the represented float64 value, while
 	// valInt stores values that are exact integers. Both have to go first
 	// in the struct to guarantee alignment for atomic operations.
 	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	valBits uint64
 	valInt  uint64
-
-	selfCollector
-	desc *Desc
-
-	createdTs  *timestamppb.Timestamp
-	labelPairs []*dto.LabelPair
-	exemplar   atomic.Value // Containing nil or a *dto.Exemplar.
-
-	// now is for testing purposes, by default it's time.Now.
-	now func() time.Time
 }
 
 func (c *counter) Desc() *Desc {

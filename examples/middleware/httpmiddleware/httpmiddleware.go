@@ -29,8 +29,8 @@ type Middleware interface {
 }
 
 type middleware struct {
-	buckets  []float64
 	registry prometheus.Registerer
+	buckets  []float64
 }
 
 // WrapHandler wraps the given HTTP handler for instrumentation:

@@ -80,8 +80,8 @@ func WrapRegistererWithPrefix(prefix string, reg Registerer) Registerer {
 
 type wrappingRegisterer struct {
 	wrappedRegisterer Registerer
-	prefix            string
 	labels            Labels
+	prefix            string
 }
 
 func (r *wrappingRegisterer) Register(c Collector) error {
@@ -119,8 +119,8 @@ func (r *wrappingRegisterer) Unregister(c Collector) bool {
 
 type wrappingCollector struct {
 	wrappedCollector Collector
-	prefix           string
 	labels           Labels
+	prefix           string
 }
 
 func (c *wrappingCollector) Collect(ch chan<- Metric) {
@@ -160,8 +160,8 @@ func (c *wrappingCollector) unwrapRecursively() Collector {
 
 type wrappingMetric struct {
 	wrappedMetric Metric
-	prefix        string
 	labels        Labels
+	prefix        string
 }
 
 func (m *wrappingMetric) Desc() *Desc {

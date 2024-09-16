@@ -86,20 +86,6 @@ const (
 // a help string and to explicitly set the Objectives field to the desired value
 // as the default value will change in the upcoming v1.0.0 of the library.
 type SummaryOpts struct {
-	// Namespace, Subsystem, and Name are components of the fully-qualified
-	// name of the Summary (created by joining these components with
-	// "_"). Only Name is mandatory, the others merely help structuring the
-	// name. Note that the fully-qualified name of the Summary must be a
-	// valid Prometheus metric name.
-	Namespace string
-	Subsystem string
-	Name      string
-
-	// Help provides information about this Summary.
-	//
-	// Metrics with the same fully-qualified name must have the same Help
-	// string.
-	Help string
 
 	// ConstLabels are used to attach fixed labels to this metric. Metrics
 	// with the same fully-qualified name must have the same label names in
@@ -125,6 +111,23 @@ type SummaryOpts struct {
 	// quantiles.
 	Objectives map[float64]float64
 
+	// now is for testing purposes, by default it's time.Now.
+	now func() time.Time
+	// Namespace, Subsystem, and Name are components of the fully-qualified
+	// name of the Summary (created by joining these components with
+	// "_"). Only Name is mandatory, the others merely help structuring the
+	// name. Note that the fully-qualified name of the Summary must be a
+	// valid Prometheus metric name.
+	Namespace string
+	Subsystem string
+	Name      string
+
+	// Help provides information about this Summary.
+	//
+	// Metrics with the same fully-qualified name must have the same Help
+	// string.
+	Help string
+
 	// MaxAge defines the duration for which an observation stays relevant
 	// for the summary. Only applies to pre-calculated quantiles, does not
 	// apply to _sum and _count. Must be positive. The default value is
@@ -146,9 +149,6 @@ type SummaryOpts struct {
 	// is the internal buffer size of the underlying package
 	// "github.com/bmizerany/perks/quantile").
 	BufCap uint32
-
-	// now is for testing purposes, by default it's time.Now.
-	now func() time.Time
 }
 
 // SummaryVecOpts bundles the options to create a SummaryVec metric.
@@ -272,31 +272,34 @@ func newSummary(desc *Desc, opts SummaryOpts, labelValues ...string) Summary {
 }
 
 type summary struct {
+	headStreamExpTime, hotBufExpTime time.Time
+
 	selfCollector
+
+	desc *Desc
+
+	objectives map[float64]float64
+	headStream *quantile.Stream
+
+	createdTs        *timestamppb.Timestamp
+	sortedObjectives []float64
+
+	labelPairs []*dto.LabelPair
+
+	hotBuf, coldBuf []float64
+
+	streams []*quantile.Stream
+
+	sum float64
+	cnt uint64
+
+	streamDuration time.Duration
+	headStreamIdx  int
 
 	bufMtx sync.Mutex // Protects hotBuf and hotBufExpTime.
 	mtx    sync.Mutex // Protects every other moving part.
 	// Lock bufMtx before mtx if both are needed.
 
-	desc *Desc
-
-	objectives       map[float64]float64
-	sortedObjectives []float64
-
-	labelPairs []*dto.LabelPair
-
-	sum float64
-	cnt uint64
-
-	hotBuf, coldBuf []float64
-
-	streams                          []*quantile.Stream
-	streamDuration                   time.Duration
-	headStream                       *quantile.Stream
-	headStreamIdx                    int
-	headStreamExpTime, hotBufExpTime time.Time
-
-	createdTs *timestamppb.Timestamp
 }
 
 func (s *summary) Desc() *Desc {
@@ -438,13 +441,7 @@ type noObjectivesSummary struct {
 	// last observation on the now cool one has completed. All cool fields must
 	// be merged into the new hot before releasing writeMtx.
 
-	// Fields with atomic access first! See alignment constraint:
-	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	countAndHotIdx uint64
-
 	selfCollector
-	desc     *Desc
-	writeMtx sync.Mutex // Only used in the Write method.
 
 	// Two counts, one is "hot" for lock-free observations, the other is
 	// "cold" for writing out a dto.Metric. It has to be an array of
@@ -452,9 +449,18 @@ type noObjectivesSummary struct {
 	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG.
 	counts [2]*summaryCounts
 
-	labelPairs []*dto.LabelPair
+	desc *Desc
 
 	createdTs *timestamppb.Timestamp
+
+	labelPairs []*dto.LabelPair
+
+	// Fields with atomic access first! See alignment constraint:
+	// http://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	countAndHotIdx uint64
+
+	writeMtx sync.Mutex // Only used in the Write method.
+
 }
 
 func (s *noObjectivesSummary) Desc() *Desc {
@@ -693,11 +699,11 @@ func (v *SummaryVec) MustCurryWith(labels Labels) ObserverVec {
 
 type constSummary struct {
 	desc       *Desc
+	quantiles  map[float64]float64
+	createdTs  *timestamppb.Timestamp
+	labelPairs []*dto.LabelPair
 	count      uint64
 	sum        float64
-	quantiles  map[float64]float64
-	labelPairs []*dto.LabelPair
-	createdTs  *timestamppb.Timestamp
 }
 
 func (s *constSummary) Desc() *Desc {

@@ -66,20 +66,6 @@ type Metric interface {
 // optional and can safely be left at their zero value, although it is strongly
 // encouraged to set a Help string.
 type Opts struct {
-	// Namespace, Subsystem, and Name are components of the fully-qualified
-	// name of the Metric (created by joining these components with
-	// "_"). Only Name is mandatory, the others merely help structuring the
-	// name. Note that the fully-qualified name of the metric must be a
-	// valid Prometheus metric name.
-	Namespace string
-	Subsystem string
-	Name      string
-
-	// Help provides information about this metric.
-	//
-	// Metrics with the same fully-qualified name must have the same Help
-	// string.
-	Help string
 
 	// ConstLabels are used to attach fixed labels to this metric. Metrics
 	// with the same fully-qualified name must have the same label names in
@@ -95,6 +81,20 @@ type Opts struct {
 
 	// now is for testing purposes, by default it's time.Now.
 	now func() time.Time
+	// Namespace, Subsystem, and Name are components of the fully-qualified
+	// name of the Metric (created by joining these components with
+	// "_"). Only Name is mandatory, the others merely help structuring the
+	// name. Note that the fully-qualified name of the metric must be a
+	// valid Prometheus metric name.
+	Namespace string
+	Subsystem string
+	Name      string
+
+	// Help provides information about this metric.
+	//
+	// Metrics with the same fully-qualified name must have the same Help
+	// string.
+	Help string
 }
 
 // BuildFQName joins the given three name components by "_". Empty name
@@ -205,12 +205,12 @@ func (m *withExemplarsMetric) Write(pb *dto.Metric) error {
 
 // Exemplar is easier to use, user-facing representation of *dto.Exemplar.
 type Exemplar struct {
-	Value  float64
-	Labels Labels
 	// Optional.
 	// Default value (time.Time{}) indicates its empty, which should be
 	// understood as time.Now() time at the moment of creation of metric.
 	Timestamp time.Time
+	Labels    Labels
+	Value     float64
 }
 
 // NewMetricWithExemplars returns a new Metric wrapping the provided Metric with given

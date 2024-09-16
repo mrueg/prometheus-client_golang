@@ -38,16 +38,17 @@ var DefaultRoundTripper http.RoundTripper = &http.Transport{
 
 // Config defines configuration parameters for a new client.
 type Config struct {
-	// The address of the Prometheus to connect to.
-	Address string
+
+	// RoundTripper is used by the Client to drive HTTP requests. If not
+	// provided, DefaultRoundTripper will be used.
+	RoundTripper http.RoundTripper
 
 	// Client is used by the Client to drive HTTP requests. If not provided,
 	// a new one based on the provided RoundTripper (or DefaultRoundTripper) will be used.
 	Client *http.Client
 
-	// RoundTripper is used by the Client to drive HTTP requests. If not
-	// provided, DefaultRoundTripper will be used.
-	RoundTripper http.RoundTripper
+	// The address of the Prometheus to connect to.
+	Address string
 }
 
 func (cfg *Config) roundTripper() http.RoundTripper {

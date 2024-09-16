@@ -87,16 +87,16 @@ type OpCode struct {
 // expected-case behavior dependent in a complicated way on how many
 // elements the sequences have in common; best case time is linear.
 type SequenceMatcher struct {
-	a              []string
-	b              []string
 	b2j            map[string][]int
 	IsJunk         func(string) bool
-	autoJunk       bool
 	bJunk          map[string]struct{}
-	matchingBlocks []Match
 	fullBCount     map[string]int
 	bPopular       map[string]struct{}
+	a              []string
+	b              []string
+	matchingBlocks []Match
 	opCodes        []OpCode
+	autoJunk       bool
 }
 
 func NewMatcher(a, b []string) *SequenceMatcher {
@@ -534,13 +534,13 @@ func formatRangeUnified(start, stop int) string {
 
 // Unified diff parameters
 type UnifiedDiff struct {
-	A        []string // First sequence lines
 	FromFile string   // First file name
 	FromDate string   // First file time
-	B        []string // Second sequence lines
 	ToFile   string   // Second file name
 	ToDate   string   // Second file time
 	Eol      string   // Headers end of line, defaults to LF
+	A        []string // First sequence lines
+	B        []string // Second sequence lines
 	Context  int      // Number of context lines
 }
 

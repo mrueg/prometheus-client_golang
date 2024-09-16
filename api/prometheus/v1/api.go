@@ -544,15 +544,15 @@ type BuildinfoResult struct {
 // RuntimeinfoResult contains the result from querying the runtimeinfo endpoint.
 type RuntimeinfoResult struct {
 	StartTime           time.Time `json:"startTime"`
-	CWD                 string    `json:"CWD"`
-	ReloadConfigSuccess bool      `json:"reloadConfigSuccess"`
 	LastConfigTime      time.Time `json:"lastConfigTime"`
-	CorruptionCount     int       `json:"corruptionCount"`
-	GoroutineCount      int       `json:"goroutineCount"`
-	GOMAXPROCS          int       `json:"GOMAXPROCS"`
+	CWD                 string    `json:"CWD"`
 	GOGC                string    `json:"GOGC"`
 	GODEBUG             string    `json:"GODEBUG"`
 	StorageRetention    string    `json:"storageRetention"`
+	CorruptionCount     int       `json:"corruptionCount"`
+	GoroutineCount      int       `json:"goroutineCount"`
+	GOMAXPROCS          int       `json:"GOMAXPROCS"`
+	ReloadConfigSuccess bool      `json:"reloadConfigSuccess"`
 }
 
 // SnapshotResult contains the result from querying the snapshot endpoint.
@@ -569,8 +569,8 @@ type RulesResult struct {
 type RuleGroup struct {
 	Name     string  `json:"name"`
 	File     string  `json:"file"`
-	Interval float64 `json:"interval"`
 	Rules    Rules   `json:"rules"`
+	Interval float64 `json:"interval"`
 }
 
 // Recording and alerting rules are stored in the same slice to preserve the order
@@ -590,28 +590,28 @@ type Rules []interface{}
 
 // AlertingRule models a alerting rule.
 type AlertingRule struct {
-	Name           string         `json:"name"`
-	Query          string         `json:"query"`
-	Duration       float64        `json:"duration"`
+	LastEvaluation time.Time      `json:"lastEvaluation"`
 	Labels         model.LabelSet `json:"labels"`
 	Annotations    model.LabelSet `json:"annotations"`
-	Alerts         []*Alert       `json:"alerts"`
+	Name           string         `json:"name"`
+	Query          string         `json:"query"`
 	Health         RuleHealth     `json:"health"`
 	LastError      string         `json:"lastError,omitempty"`
-	EvaluationTime float64        `json:"evaluationTime"`
-	LastEvaluation time.Time      `json:"lastEvaluation"`
 	State          string         `json:"state"`
+	Alerts         []*Alert       `json:"alerts"`
+	Duration       float64        `json:"duration"`
+	EvaluationTime float64        `json:"evaluationTime"`
 }
 
 // RecordingRule models a recording rule.
 type RecordingRule struct {
+	LastEvaluation time.Time      `json:"lastEvaluation"`
+	Labels         model.LabelSet `json:"labels,omitempty"`
 	Name           string         `json:"name"`
 	Query          string         `json:"query"`
-	Labels         model.LabelSet `json:"labels,omitempty"`
 	Health         RuleHealth     `json:"health"`
 	LastError      string         `json:"lastError,omitempty"`
 	EvaluationTime float64        `json:"evaluationTime"`
-	LastEvaluation time.Time      `json:"lastEvaluation"`
 }
 
 // Alert models an active alert.
@@ -631,15 +631,15 @@ type TargetsResult struct {
 
 // ActiveTarget models an active Prometheus scrape target.
 type ActiveTarget struct {
+	LastScrape         time.Time         `json:"lastScrape"`
 	DiscoveredLabels   map[string]string `json:"discoveredLabels"`
 	Labels             model.LabelSet    `json:"labels"`
 	ScrapePool         string            `json:"scrapePool"`
 	ScrapeURL          string            `json:"scrapeUrl"`
 	GlobalURL          string            `json:"globalUrl"`
 	LastError          string            `json:"lastError"`
-	LastScrape         time.Time         `json:"lastScrape"`
-	LastScrapeDuration float64           `json:"lastScrapeDuration"`
 	Health             HealthStatus      `json:"health"`
+	LastScrapeDuration float64           `json:"lastScrapeDuration"`
 }
 
 // DroppedTarget models a dropped Prometheus scrape target.
@@ -665,20 +665,20 @@ type Metadata struct {
 
 // queryResult contains result data for a query.
 type queryResult struct {
-	Type   model.ValueType `json:"resultType"`
-	Result interface{}     `json:"result"`
+	Result interface{} `json:"result"`
 
 	// The decoded value.
-	v model.Value
+	v    model.Value
+	Type model.ValueType `json:"resultType"`
 }
 
 // TSDBResult contains the result from querying the tsdb endpoint.
 type TSDBResult struct {
-	HeadStats                   TSDBHeadStats `json:"headStats"`
 	SeriesCountByMetricName     []Stat        `json:"seriesCountByMetricName"`
 	LabelValueCountByLabelName  []Stat        `json:"labelValueCountByLabelName"`
 	MemoryInBytesByLabelName    []Stat        `json:"memoryInBytesByLabelName"`
 	SeriesCountByLabelValuePair []Stat        `json:"seriesCountByLabelValuePair"`
+	HeadStats                   TSDBHeadStats `json:"headStats"`
 }
 
 // TSDBHeadStats contains TSDB stats
@@ -707,8 +707,8 @@ func (rg *RuleGroup) UnmarshalJSON(b []byte) error {
 	v := struct {
 		Name     string            `json:"name"`
 		File     string            `json:"file"`
-		Interval float64           `json:"interval"`
 		Rules    []json.RawMessage `json:"rules"`
+		Interval float64           `json:"interval"`
 	}{}
 
 	if err := json.Unmarshal(b, &v); err != nil {
@@ -751,17 +751,17 @@ func (r *AlertingRule) UnmarshalJSON(b []byte) error {
 	}
 
 	rule := struct {
-		Name           string         `json:"name"`
-		Query          string         `json:"query"`
-		Duration       float64        `json:"duration"`
+		LastEvaluation time.Time      `json:"lastEvaluation"`
 		Labels         model.LabelSet `json:"labels"`
 		Annotations    model.LabelSet `json:"annotations"`
-		Alerts         []*Alert       `json:"alerts"`
+		Name           string         `json:"name"`
+		Query          string         `json:"query"`
 		Health         RuleHealth     `json:"health"`
 		LastError      string         `json:"lastError,omitempty"`
-		EvaluationTime float64        `json:"evaluationTime"`
-		LastEvaluation time.Time      `json:"lastEvaluation"`
 		State          string         `json:"state"`
+		Alerts         []*Alert       `json:"alerts"`
+		Duration       float64        `json:"duration"`
+		EvaluationTime float64        `json:"evaluationTime"`
 	}{}
 	if err := json.Unmarshal(b, &rule); err != nil {
 		return err
@@ -796,13 +796,13 @@ func (r *RecordingRule) UnmarshalJSON(b []byte) error {
 	}
 
 	rule := struct {
+		LastEvaluation time.Time      `json:"lastEvaluation"`
+		Labels         model.LabelSet `json:"labels,omitempty"`
 		Name           string         `json:"name"`
 		Query          string         `json:"query"`
-		Labels         model.LabelSet `json:"labels,omitempty"`
 		Health         RuleHealth     `json:"health"`
 		LastError      string         `json:"lastError,omitempty"`
 		EvaluationTime float64        `json:"evaluationTime"`
-		LastEvaluation time.Time      `json:"lastEvaluation"`
 	}{}
 	if err := json.Unmarshal(b, &rule); err != nil {
 		return err
@@ -820,8 +820,8 @@ func (r *RecordingRule) UnmarshalJSON(b []byte) error {
 
 func (qr *queryResult) UnmarshalJSON(b []byte) error {
 	v := struct {
-		Type   model.ValueType `json:"resultType"`
 		Result json.RawMessage `json:"result"`
+		Type   model.ValueType `json:"resultType"`
 	}{}
 
 	err := json.Unmarshal(b, &v)

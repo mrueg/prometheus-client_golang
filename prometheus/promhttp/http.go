@@ -347,6 +347,14 @@ type Logger interface {
 // HandlerOpts specifies options how to serve metrics via an http.Handler. The
 // zero value of HandlerOpts is a reasonable default.
 type HandlerOpts struct {
+	// ProcessStartTime allows setting process start timevalue that will be exposed
+	// with "Process-Start-Time-Unix" response header along with the metrics
+	// payload. This allow callers to have efficient transformations to cumulative
+	// counters (e.g. OpenTelemetry) or generally _created timestamp estimation per
+	// scrape target.
+	// NOTE: This feature is experimental and not covered by OpenMetrics or Prometheus
+	// exposition format.
+	ProcessStartTime time.Time
 	// ErrorLog specifies an optional Logger for errors collecting and
 	// serving metrics. If nil, errors are not logged at all. Note that the
 	// type of a reported error is often prometheus.MultiError, which
@@ -354,10 +362,6 @@ type HandlerOpts struct {
 	// latter, create a Logger implementation that detects a
 	// prometheus.MultiError and formats the contained errors into one line.
 	ErrorLog Logger
-	// ErrorHandling defines how errors are handled. Note that errors are
-	// logged regardless of the configured ErrorHandling provided ErrorLog
-	// is not nil.
-	ErrorHandling HandlerErrorHandling
 	// If Registry is not nil, it is used to register a metric
 	// "promhttp_metric_handler_errors_total", partitioned by "cause". A
 	// failed registration causes a panic. Note that this error counter is
@@ -370,11 +374,6 @@ type HandlerOpts struct {
 	// no effect on the HTTP status code because ErrorHandling is set to
 	// ContinueOnError.
 	Registry prometheus.Registerer
-	// DisableCompression disables the response encoding (compression) and
-	// encoding negotiation. If true, the handler will
-	// never compress the response, even if requested
-	// by the client and the OfferedCompressions field is set.
-	DisableCompression bool
 	// OfferedCompressions is a set of encodings (compressions) handler will
 	// try to offer when negotiating with the client. This defaults to identity, gzip
 	// and zstd.
@@ -383,6 +382,10 @@ type HandlerOpts struct {
 	// handler always fallbacks to no compression (identity), for
 	// compatibility reasons. In such cases ErrorLog will be used if set.
 	OfferedCompressions []Compression
+	// ErrorHandling defines how errors are handled. Note that errors are
+	// logged regardless of the configured ErrorHandling provided ErrorLog
+	// is not nil.
+	ErrorHandling HandlerErrorHandling
 	// The number of concurrent HTTP requests is limited to
 	// MaxRequestsInFlight. Additional requests are responded to with 503
 	// Service Unavailable and a suitable message in the body. If
@@ -398,6 +401,11 @@ type HandlerOpts struct {
 	// away). Until the implementation is improved, it is recommended to
 	// implement a separate timeout in potentially slow Collectors.
 	Timeout time.Duration
+	// DisableCompression disables the response encoding (compression) and
+	// encoding negotiation. If true, the handler will
+	// never compress the response, even if requested
+	// by the client and the OfferedCompressions field is set.
+	DisableCompression bool
 	// If true, the experimental OpenMetrics encoding is added to the
 	// possible options during content negotiation. Note that Prometheus
 	// 2.5.0+ will negotiate OpenMetrics as first priority. OpenMetrics is
@@ -408,14 +416,6 @@ type HandlerOpts struct {
 	// (which changes the identity of the resulting series on the Prometheus
 	// server).
 	EnableOpenMetrics bool
-	// ProcessStartTime allows setting process start timevalue that will be exposed
-	// with "Process-Start-Time-Unix" response header along with the metrics
-	// payload. This allow callers to have efficient transformations to cumulative
-	// counters (e.g. OpenTelemetry) or generally _created timestamp estimation per
-	// scrape target.
-	// NOTE: This feature is experimental and not covered by OpenMetrics or Prometheus
-	// exposition format.
-	ProcessStartTime time.Time
 }
 
 // httpError removes any content-encoding header and then calls http.Error with

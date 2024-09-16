@@ -65,9 +65,9 @@ type valueFunc struct {
 	selfCollector
 
 	desc       *Desc
-	valType    ValueType
 	function   func() float64
 	labelPairs []*dto.LabelPair
+	valType    ValueType
 }
 
 // newValueFunc returns a newly allocated valueFunc with the given Desc and
